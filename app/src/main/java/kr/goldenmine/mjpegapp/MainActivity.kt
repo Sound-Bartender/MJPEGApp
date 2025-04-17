@@ -24,7 +24,6 @@ import kotlinx.coroutines.withContext
 import kr.goldenmine.mjpegapp.ai.FaceProcessor
 import kr.goldenmine.mjpegapp.ai.OnnxInferenceManagerMulti
 import kr.goldenmine.mjpegapp.ai.OnnxInputConverter
-import kr.goldenmine.mjpegapp.util.floatBufferToPcm16ByteArray
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.DataInputStream
@@ -110,9 +109,9 @@ class MainActivity : AppCompatActivity() {
 
         textViewStatus.movementMethod = ScrollingMovementMethod() // 스크롤 가능하게
         OnnxInferenceManagerMulti.initialize(this)
-//        FaceProcessor.initialize(this)
 
         buttonConnect.setOnClickListener {
+//            FaceProcessor.initialize(this)
             if (!isRunning.get()) {
                 val ipAddress = editTextIpAddress.text.toString().trim()
                 val portStr = editTextPort.text.toString().trim()
