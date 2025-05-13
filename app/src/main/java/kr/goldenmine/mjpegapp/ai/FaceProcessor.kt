@@ -25,7 +25,7 @@ object FaceProcessor {
             .setBaseOptions(
                 BaseOptions.builder()
                     .setModelAssetPath(FACE_MODEL)
-//                    .setDelegate(Delegate.CPU)
+//                    .setDelegate(Delegate.GPU)
                     .build()
             )
             .setRunningMode(RunningMode.IMAGE) // 단일 이미지 처리 모드

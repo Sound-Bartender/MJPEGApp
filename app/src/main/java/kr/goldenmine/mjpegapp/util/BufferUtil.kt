@@ -166,3 +166,17 @@ fun normalizeAndConvertToPcm16ByteArray(
         Log.d("NormalizeConvert", "처리 완료. 원본 버퍼 position 복원됨: $originalPosition")
     }
 }
+
+fun convertFloatArrayToPCM16Bytes(floatArray: FloatArray): ByteArray {
+    val byteBuffer = ByteBuffer.allocate(floatArray.size * 2) // int16 = 2 bytes
+    byteBuffer.order(ByteOrder.LITTLE_ENDIAN)
+
+    for (f in floatArray) {
+        // [-1.0, 1.0] → [-32768, 32767]
+        val clamped = f.coerceIn(-1.0f, 1.0f)
+        val intVal = (clamped * 32767).toInt()
+        byteBuffer.putShort(intVal.toShort())
+    }
+
+    return byteBuffer.array()
+}

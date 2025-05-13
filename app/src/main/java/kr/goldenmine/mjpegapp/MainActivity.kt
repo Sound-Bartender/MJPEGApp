@@ -1,6 +1,5 @@
 package kr.goldenmine.mjpegapp
 
-//import kr.goldenmine.mjpegapp.ai.AIInference
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Bundle
@@ -22,8 +21,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kr.goldenmine.mjpegapp.ai.FaceProcessor
-import kr.goldenmine.mjpegapp.ai.OnnxInferenceManagerMulti
-import kr.goldenmine.mjpegapp.ai.OnnxInputConverter
+import kr.goldenmine.mjpegapp.ai.IIANetTFLite
+import kr.goldenmine.mjpegapp.ai.IIANetInputConverter
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.DataInputStream
@@ -95,7 +94,7 @@ class MainActivity : AppCompatActivity() {
 
     private val TAG = "MainActivityStream"
 
-    private val converter = OnnxInputConverter()
+    private val converter = IIANetInputConverter()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -108,7 +107,10 @@ class MainActivity : AppCompatActivity() {
         editTextPort = findViewById(R.id.editTextPort)
 
         textViewStatus.movementMethod = ScrollingMovementMethod() // 스크롤 가능하게
-        OnnxInferenceManagerMulti.initialize(this)
+//        OnnxInferenceManagerMulti.initialize(this)
+//        TFLiteInferenceManager.loadModelFile(applicationContext)
+        IIANetTFLite.loadVideoModel(applicationContext)
+        IIANetTFLite.loadAudioModel(applicationContext)
 
         buttonConnect.setOnClickListener {
 //            FaceProcessor.initialize(this)
@@ -230,7 +232,7 @@ class MainActivity : AppCompatActivity() {
                 val timestamp = byteBuffer.long
                 val payloadLength = byteBuffer.int
 
-                //Log.d(TAG, "Received Header: Type=$dataType, TS=$timestamp, Len=$payloadLength")
+                Log.d(TAG, "Received Header: Type=$dataType, TS=$timestamp, Len=$payloadLength  ${System.currentTimeMillis()}")
 
                 if (payloadLength < 0) {
                     updateStatus("오류: 잘못된 페이로드 길이 수신 ($payloadLength). 연결을 종료합니다.")
@@ -248,13 +250,15 @@ class MainActivity : AppCompatActivity() {
                     // 3. 데이터 타입에 따른 처리
                     when (dataType) {
                         TYPE_VIDEO -> {
-//                            Log.d(TAG, "Received Video: ${payload.size} bytes")
+                            updateStatus("Received Video: ${payload.size} bytes")
                             // 비디오 버퍼에 추가 (간단히 최신 것만 유지하거나 큐 사용)
                             videoFrameBuffer.offer(Pair(timestamp, payload)) // 큐 사용 시
                             showVideoFrame(payload, timestamp) // 직접 처리
+
+                            while(videoFrameBuffer.size > 3) videoFrameBuffer.poll()
                         }
                         TYPE_AUDIO -> {
-//                            Log.d(TAG, "Received Audio: ${payload.size} bytes")
+                            updateStatus("Received Audio: ${payload.size} bytes")
                             // 오디오 버퍼에 추가
                             audioChunkBuffer.offer(Pair(timestamp, payload))
                             // AI 처리를 위해 동기화 로직 호출 (예시)
@@ -266,7 +270,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 } else if (payloadLength == 0) {
                     // 길이가 0인 데이터 (Heartbeat 등?) - 현재는 무시
-                    // Log.d(TAG, "Received zero-length payload for Type=$dataType, TS=$timestamp")
+                     Log.d(TAG, "Received zero-length payload for Type=$dataType, TS=$timestamp")
                 }
 
             } catch (e: EOFException) {
@@ -288,6 +292,7 @@ class MainActivity : AppCompatActivity() {
                 stopStreamingInternal() // 예상치 못한 오류 시 종료
                 break
             }
+            Log.d(TAG, "Received Header Complete ${System.currentTimeMillis()}")
         }
         // 루프 종료 후 정리 (stopStreamingInternal이 이미 호출되었을 수 있음)
         if (isRunning.get()) {
@@ -318,8 +323,8 @@ class MainActivity : AppCompatActivity() {
     // 오디오/비디오 동기화 및 AI 처리 로직
     private fun processSynchronizedData() {
         // 버퍼가 너무 차면 하나씩 버림
-        while(videoFrameBuffer.size > 5) videoFrameBuffer.poll()
-        while(audioChunkBuffer.size > 5) audioChunkBuffer.poll()
+        while(videoFrameBuffer.size > 3) videoFrameBuffer.poll()
+        while(audioChunkBuffer.size > 3) audioChunkBuffer.poll()
 
         // 둘중 하나라도 비어있으면 처리하지 않음
         if(videoFrameBuffer.isEmpty() || audioChunkBuffer.isEmpty()) return
@@ -370,36 +375,21 @@ class MainActivity : AppCompatActivity() {
             if(croppedImage != null) {
                 converter.addVideoFrame(croppedImage)
                 converter.addAudioChunk(bestAudio)
-//                synthesizedBuffer.offer(
-//                    VideoAudioFrame(
-//                        videoArray = croppedImage,
-//                        audioArray = bestAudio,
-//                        videoTimestamp = bestVideoTimestamp,
-//                        audioTimestamp = bestAudioTimestamp,
-//                    )
-//                )
             }
         }
 
         // 1초 이상 쌓인 경우 AI 처리
+        if(!converter.checkIfReady()) {
+            return
+        }
+        coroutineScope.launch {
+            val buffers = converter.processBuffers()
 
-            val buffers = converter.processBuffersIfReady()
-            if (buffers != null) {
-                coroutineScope.launch {
-                    // 잘 돌림
-                    val enhancedAudio =
-                        OnnxInferenceManagerMulti.runInference(buffers.first, buffers.second)
-                    //            val enhancedAudioData: ByteArray = simulateAiProcessing(audioData) // AI 모델 호출 (가상)
-                    if (enhancedAudio != null) {
-                        queueEnhancedAudio(enhancedAudio)
-                    }
-//                    val enhancedAudio = buffers.first
-//                    delay(5000)
-//                    queueEnhancedAudio(floatBufferToPcm16ByteArray(enhancedAudio))
-                    Log.d(TAG, "AI 모델 처리 완료")
-                    //            sendEnhancedAudio(normalizeAndConvertToPcm16ByteArray(buffers.first))
-                }
-            }
+            // 잘 돌림
+            val enhancedAudio = IIANetTFLite.runInference(buffers.first, buffers.second)
+            queueEnhancedAudio(enhancedAudio)
+            Log.d(TAG, "AI 모델 처리 완료")
+        }
     }
 
     // --- ★ 실제 전송 로직 (Consumer) ★ ---
