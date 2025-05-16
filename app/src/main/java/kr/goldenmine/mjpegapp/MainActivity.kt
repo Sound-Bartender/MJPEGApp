@@ -21,8 +21,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kr.goldenmine.mjpegapp.ai.FaceProcessor
-import kr.goldenmine.mjpegapp.ai.IIANetTFLite
 import kr.goldenmine.mjpegapp.ai.IIANetInputConverter
+import kr.goldenmine.mjpegapp.ai.IIANetTFLite
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.DataInputStream
@@ -137,6 +137,13 @@ class MainActivity : AppCompatActivity() {
                 editTextPort.isEnabled = true
             }
         }
+
+        coroutineScope.launch {
+            val videoInputDummy = ByteBuffer.allocateDirect(1 * 25 * 88 * 88 * 4).order(ByteOrder.nativeOrder())
+            val audioInputDummy = ByteBuffer.allocateDirect(1 * 1 * 16000 * 4).order(ByteOrder.nativeOrder())
+
+            IIANetTFLite.runInference(videoInputDummy, audioInputDummy)
+        }
     }
 
     private fun updateStatus(message: String) {
@@ -194,7 +201,6 @@ class MainActivity : AppCompatActivity() {
                                 Log.i(TAG, "[Sender] 전송 코루틴 취소됨.")
                             }
                         }
-                        // --- --- --- --- --- --- --- --- ---
 
                         // 데이터 수신 및 처리 루프 시작
                         receiveDataLoop()
@@ -232,7 +238,7 @@ class MainActivity : AppCompatActivity() {
                 val timestamp = byteBuffer.long
                 val payloadLength = byteBuffer.int
 
-                Log.d(TAG, "Received Header: Type=$dataType, TS=$timestamp, Len=$payloadLength  ${System.currentTimeMillis()}")
+//                Log.d(TAG, "Received Header: Type=$dataType, TS=$timestamp, Len=$payloadLength  ${System.currentTimeMillis()}")
 
                 if (payloadLength < 0) {
                     updateStatus("오류: 잘못된 페이로드 길이 수신 ($payloadLength). 연결을 종료합니다.")
@@ -250,15 +256,17 @@ class MainActivity : AppCompatActivity() {
                     // 3. 데이터 타입에 따른 처리
                     when (dataType) {
                         TYPE_VIDEO -> {
-                            updateStatus("Received Video: ${payload.size} bytes")
+//                            updateStatus("Received Video: ${payload.size} bytes")
                             // 비디오 버퍼에 추가 (간단히 최신 것만 유지하거나 큐 사용)
                             videoFrameBuffer.offer(Pair(timestamp, payload)) // 큐 사용 시
                             showVideoFrame(payload, timestamp) // 직접 처리
-
-                            while(videoFrameBuffer.size > 3) videoFrameBuffer.poll()
+                            while(videoFrameBuffer.size > 3) {
+                                videoFrameBuffer.poll()
+                                Log.w(TAG, "버리기 video C")
+                            }
                         }
                         TYPE_AUDIO -> {
-                            updateStatus("Received Audio: ${payload.size} bytes")
+//                            updateStatus("Received Audio: ${payload.size} bytes")
                             // 오디오 버퍼에 추가
                             audioChunkBuffer.offer(Pair(timestamp, payload))
                             // AI 처리를 위해 동기화 로직 호출 (예시)
@@ -292,7 +300,7 @@ class MainActivity : AppCompatActivity() {
                 stopStreamingInternal() // 예상치 못한 오류 시 종료
                 break
             }
-            Log.d(TAG, "Received Header Complete ${System.currentTimeMillis()}")
+//            Log.d(TAG, "Received Header Complete ${System.currentTimeMillis()}")
         }
         // 루프 종료 후 정리 (stopStreamingInternal이 이미 호출되었을 수 있음)
         if (isRunning.get()) {
@@ -323,8 +331,14 @@ class MainActivity : AppCompatActivity() {
     // 오디오/비디오 동기화 및 AI 처리 로직
     private fun processSynchronizedData() {
         // 버퍼가 너무 차면 하나씩 버림
-        while(videoFrameBuffer.size > 3) videoFrameBuffer.poll()
-        while(audioChunkBuffer.size > 3) audioChunkBuffer.poll()
+        while(videoFrameBuffer.size > 3) {
+            videoFrameBuffer.poll()
+            Log.w(TAG, "버리기 video A")
+        }
+        while(audioChunkBuffer.size > 3) {
+            audioChunkBuffer.poll()
+            Log.w(TAG, "버리기 audio A")
+        }
 
         // 둘중 하나라도 비어있으면 처리하지 않음
         if(videoFrameBuffer.isEmpty() || audioChunkBuffer.isEmpty()) return
@@ -354,8 +368,10 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     // 더 빠른 것 부터 버림
                     if(peekVideo.first > peekAudio.first) { // 비디오가 느림
+                        Log.w(TAG, "버리기 audio B")
                         audioChunkBuffer.poll()
                     } else {
+                        Log.w(TAG, "버리기 video B")
                         videoFrameBuffer.poll()
                     }
                 }
@@ -382,13 +398,13 @@ class MainActivity : AppCompatActivity() {
         if(!converter.checkIfReady()) {
             return
         }
+        val buffers = converter.processBuffers()
         coroutineScope.launch {
-            val buffers = converter.processBuffers()
-
             // 잘 돌림
+            val time = System.currentTimeMillis()
             val enhancedAudio = IIANetTFLite.runInference(buffers.first, buffers.second)
             queueEnhancedAudio(enhancedAudio)
-            Log.d(TAG, "AI 모델 처리 완료")
+            Log.d(TAG, "AI 모델 처리 완료 ${System.currentTimeMillis() - time}")
         }
     }
 
@@ -423,7 +439,7 @@ class MainActivity : AppCompatActivity() {
                         dataOutputStream?.write(audioData)
                         dataOutputStream?.flush() // 즉시 전송
                     }
-                    // Log.d(TAG, "[Sender] 큐에서 데이터 전송 완료: ${payloadLength} bytes")
+                     Log.d(TAG, "[Sender] 큐에서 데이터 전송 완료: ${payloadLength} bytes")
 
                 } catch (e: IOException) {
                     updateStatus("[Sender] 데이터 전송 중 IO 오류: ${e.message}")

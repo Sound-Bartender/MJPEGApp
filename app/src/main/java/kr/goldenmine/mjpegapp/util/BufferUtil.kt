@@ -180,3 +180,23 @@ fun convertFloatArrayToPCM16Bytes(floatArray: FloatArray): ByteArray {
 
     return byteBuffer.array()
 }
+
+fun convertFloat32ToPCM16(floatBuffer: ByteBuffer): ByteArray {
+    // Float32는 4바이트이므로 전체 샘플 수는 floatBuffer.limit() / 4
+    floatBuffer.order(ByteOrder.LITTLE_ENDIAN)
+    val sampleCount = floatBuffer.limit() / 4
+    val pcm16Bytes = ByteArray(sampleCount * 2) // 2바이트 per PCM16 샘플
+
+    for (i in 0 until sampleCount) {
+        val floatSample = floatBuffer.getFloat(i * 4)
+        // [-1.0, 1.0] 범위의 float -> [-32768, 32767] 범위의 PCM16으로 변환
+        val clamped = floatSample.coerceIn(-1.0f, 1.0f)
+        val intSample = (clamped * Short.MAX_VALUE).toInt()
+
+        // Little endian으로 저장
+        pcm16Bytes[i * 2] = (intSample and 0xFF).toByte()
+        pcm16Bytes[i * 2 + 1] = ((intSample shr 8) and 0xFF).toByte()
+    }
+
+    return pcm16Bytes
+}

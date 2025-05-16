@@ -55,7 +55,7 @@ object FaceProcessor {
                 Log.e(TAG, "이미지 데이터(ByteArray)를 Bitmap으로 디코딩 실패")
                 return null
             }
-        initialize(context)
+//        initialize(context)
         if(faceDetector == null) {
             return Bitmap.createScaledBitmap(
                 originalBitmap,

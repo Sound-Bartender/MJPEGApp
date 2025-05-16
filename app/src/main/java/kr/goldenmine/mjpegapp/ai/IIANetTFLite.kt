@@ -45,7 +45,7 @@ object IIANetTFLite {
     }
 
     fun loadVideoModel(context: Context) {
-        val model = loadModelFile(context, "IIANetVideo.tflite")
+        val model = loadModelFile(context, "IIANetVideo_2.tflite")
         try {
             val gpuOptions = Interpreter.Options()
             gpuOptions.addDelegate(GpuDelegate())
@@ -63,12 +63,15 @@ object IIANetTFLite {
 //        val videoInputBuffer = ByteBuffer.allocateDirect(1 * 1 * 25 * 88 * 88 * 4).order(ByteOrder.nativeOrder())
 //        videoInput.forEach { videoInputBuffer.putFloat(it) }
 //        videoInputBuffer.rewind()
-
+        val time1 = System.currentTimeMillis()
+        // [1, 512, 25]
         val visualOutputBuffer = ByteBuffer.allocateDirect(1 * 512 * 25 * 4).order(ByteOrder.nativeOrder())
 
         // Run visual model
         interpreterVideo.run(videoInputBuffer, visualOutputBuffer)
         visualOutputBuffer.rewind()
+
+        val time2 = System.currentTimeMillis()
 
         // Prepare inputs for audio model
 //        val audioInputBuffer = ByteBuffer.allocateDirect(1 * 1 * 16000 * 4).order(ByteOrder.nativeOrder())
@@ -76,7 +79,10 @@ object IIANetTFLite {
 //        audioInputBuffer.rewind()
 
         val visualFeatureBuffer = visualOutputBuffer // [1, 512, 25]
-        val audioOutputBuffer = ByteBuffer.allocateDirect(1 * 1 * 16000 * 4).order(ByteOrder.nativeOrder())
+//        val audioOutputBuffer = ByteBuffer.allocateDirect(1 * 1 * 16000 * 4).order(ByteOrder.nativeOrder())
+
+        val audioOutputBuffer = audioInputBuffer
+        audioOutputBuffer.rewind()
 
         val audioInputs = arrayOf(
             audioInputBuffer,      // audio waveform
@@ -84,13 +90,16 @@ object IIANetTFLite {
         )
 
         // Run audio model
-        interpreterAudio.runForMultipleInputsOutputs(audioInputs, mapOf(0 to audioOutputBuffer))
-        audioOutputBuffer.rewind()
+//        interpreterAudio.runForMultipleInputsOutputs(audioInputs, mapOf(0 to audioOutputBuffer))
+//        audioOutputBuffer.rewind()
 
+        val time3 = System.currentTimeMillis()
         // Convert output buffer to float array
         val output = FloatArray(16000)
         audioOutputBuffer.asFloatBuffer().get(output)
 
+        val time4 = System.currentTimeMillis()
+        Log.i(TAG, "time: ${time2-time1} ${time3-time2} ${time4-time3}")
         return convertFloatArrayToPCM16Bytes(output)
     }
 }
