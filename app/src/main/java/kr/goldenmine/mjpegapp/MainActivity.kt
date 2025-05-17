@@ -111,9 +111,10 @@ class MainActivity : AppCompatActivity() {
 //        TFLiteInferenceManager.loadModelFile(applicationContext)
         IIANetTFLite.loadVideoModel(applicationContext)
         IIANetTFLite.loadAudioModel(applicationContext)
+//        FaceProcessor.initialize(this)
 
         buttonConnect.setOnClickListener {
-//            FaceProcessor.initialize(this)
+            FaceProcessor.initialize(this)
             if (!isRunning.get()) {
                 val ipAddress = editTextIpAddress.text.toString().trim()
                 val portStr = editTextPort.text.toString().trim()
@@ -138,12 +139,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        coroutineScope.launch {
-            val videoInputDummy = ByteBuffer.allocateDirect(1 * 25 * 88 * 88 * 4).order(ByteOrder.nativeOrder())
-            val audioInputDummy = ByteBuffer.allocateDirect(1 * 1 * 16000 * 4).order(ByteOrder.nativeOrder())
-
-            IIANetTFLite.runInference(videoInputDummy, audioInputDummy)
-        }
+//        coroutineScope.launch {
+//            val videoInputDummy = ByteBuffer.allocateDirect(1 * 25 * 88 * 88 * 4).order(ByteOrder.nativeOrder())
+//            val audioInputDummy = ByteBuffer.allocateDirect(1 * 1 * 16000 * 4).order(ByteOrder.nativeOrder())
+//
+//            IIANetTFLite.runInference(videoInputDummy, audioInputDummy)
+//        }
     }
 
     private fun updateStatus(message: String) {
@@ -259,7 +260,7 @@ class MainActivity : AppCompatActivity() {
 //                            updateStatus("Received Video: ${payload.size} bytes")
                             // 비디오 버퍼에 추가 (간단히 최신 것만 유지하거나 큐 사용)
                             videoFrameBuffer.offer(Pair(timestamp, payload)) // 큐 사용 시
-                            showVideoFrame(payload, timestamp) // 직접 처리
+//                            showVideoFrame(payload, timestamp) // 직접 처리
                             while(videoFrameBuffer.size > 3) {
                                 videoFrameBuffer.poll()
                                 Log.w(TAG, "버리기 video C")
@@ -280,7 +281,6 @@ class MainActivity : AppCompatActivity() {
                     // 길이가 0인 데이터 (Heartbeat 등?) - 현재는 무시
                      Log.d(TAG, "Received zero-length payload for Type=$dataType, TS=$timestamp")
                 }
-
             } catch (e: EOFException) {
                 updateStatus("서버 연결 끊김 (EOF)")
                 stopStreamingInternal()
@@ -310,19 +310,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     // 비디오 프레임 처리 (MJPEG 디코딩 및 표시)
-    private fun showVideoFrame(frameData: ByteArray, timestamp: Long) {
+    private fun showVideoFrame(bitmap: Bitmap) {
         // 비동기 처리 또는 별도 스레드에서 디코딩 권장 (UI 스레드 차단 방지)
         // 여기서는 간단히 코루틴 내에서 처리
         try {
 //            val cropped = FaceProcessor.detectCropResizeFace(frameData, this)
-            val bitmap = BitmapFactory.decodeByteArray(frameData, 0, frameData.size)
-            if (bitmap != null) {
+//            val bitmap = BitmapFactory.decodeByteArray(frameData, 0, frameData.size)
+//            if (bitmap != null) {
                 updateImageView(bitmap)
                 // 디코딩된 비트맵과 타임스탬프를 AI 처리를 위해 저장할 수도 있음
                 // synchronizedFrameBuffer.offer(Pair(timestamp, bitmap))
-            } else {
-                Log.w(TAG, "비트맵 디코딩 실패 (Timestamp: $timestamp)")
-            }
+//            } else {
+//                Log.w(TAG, "비트맵 디코딩 실패 (Timestamp: $timestamp)")
+//            }
         } catch (e: Exception) {
             Log.e(TAG, "비트맵 디코딩 중 오류 발생", e)
         }
@@ -331,11 +331,11 @@ class MainActivity : AppCompatActivity() {
     // 오디오/비디오 동기화 및 AI 처리 로직
     private fun processSynchronizedData() {
         // 버퍼가 너무 차면 하나씩 버림
-        while(videoFrameBuffer.size > 3) {
+        while(videoFrameBuffer.size > 5) {
             videoFrameBuffer.poll()
             Log.w(TAG, "버리기 video A")
         }
-        while(audioChunkBuffer.size > 3) {
+        while(audioChunkBuffer.size > 5) {
             audioChunkBuffer.poll()
             Log.w(TAG, "버리기 audio A")
         }
@@ -360,11 +360,12 @@ class MainActivity : AppCompatActivity() {
                 if(abs(peekVideo.first - peekAudio.first) <= proposedTimeDiff) {
                     bestVideo = peekVideo.second
                     bestAudio = peekAudio.second
-                    bestVideoTimestamp = peekVideo.first // 오디오 기준 타임스탬프 사용
-                    bestAudioTimestamp = peekAudio.first // 오디오 기준 타임스탬프 사용
+                    bestVideoTimestamp = peekVideo.first
+                    bestAudioTimestamp = peekAudio.first
 
                     videoFrameBuffer.poll()
                     audioChunkBuffer.poll()
+                    break
                 } else {
                     // 더 빠른 것 부터 버림
                     if(peekVideo.first > peekAudio.first) { // 비디오가 느림
@@ -381,16 +382,15 @@ class MainActivity : AppCompatActivity() {
         }
 
         // 싱크가 맞춰진 비디오와 오디오 제공
-        if(bestVideo != null &&
-            bestAudio != null &&
-            bestVideoTimestamp != null &&
-            bestAudioTimestamp != null
-            ) {
+        if(bestVideo != null && bestAudio != null) {
+//            val originalBitmap = BitmapFactory.decodeByteArray(bestVideo, 0, bestVideo.size)
             val croppedImage = FaceProcessor.detectCropResizeFace(bestVideo, this)
 
             if(croppedImage != null) {
                 converter.addVideoFrame(croppedImage)
                 converter.addAudioChunk(bestAudio)
+                showVideoFrame(croppedImage)
+//                showVideoFrame(originalBitmap)
             }
         }
 
@@ -403,8 +403,12 @@ class MainActivity : AppCompatActivity() {
             // 잘 돌림
             val time = System.currentTimeMillis()
             val enhancedAudio = IIANetTFLite.runInference(buffers.first, buffers.second)
-            queueEnhancedAudio(enhancedAudio)
-            Log.d(TAG, "AI 모델 처리 완료 ${System.currentTimeMillis() - time}")
+            if(enhancedAudio != null) {
+                queueEnhancedAudio(enhancedAudio)
+                Log.d(TAG, "AI 모델 처리 완료 ${System.currentTimeMillis() - time}")
+            } else {
+                Log.w(TAG, "휴대폰 성능 미달로 인해 추론 생략 $time")
+            }
         }
     }
 
@@ -439,7 +443,7 @@ class MainActivity : AppCompatActivity() {
                         dataOutputStream?.write(audioData)
                         dataOutputStream?.flush() // 즉시 전송
                     }
-                     Log.d(TAG, "[Sender] 큐에서 데이터 전송 완료: ${payloadLength} bytes")
+                     Log.d(TAG, "[Sender] 큐에서 데이터 전송 완료: $payloadLength bytes")
 
                 } catch (e: IOException) {
                     updateStatus("[Sender] 데이터 전송 중 IO 오류: ${e.message}")

@@ -16,10 +16,6 @@ class IIANetInputConverter(
 ) {
     private val TAG = "IIANetInputConverter"
 
-//    private val videoFrameBuffer = LinkedList<Bitmap>()
-//    private val audioFrameBuffer = LinkedList<ByteArray>()
-    private val audioChunksNeeded = targetAudioSamples / audioSamplesPerChunk
-
     private val videoInputBufferA = ByteBuffer.allocateDirect(1 * 1 * videoFramesNeeded * frameSize * frameSize * 4).order(ByteOrder.nativeOrder())
     private val audioInputBufferA = ByteBuffer.allocateDirect(1 * 1 * targetAudioSamples * 4).order(ByteOrder.nativeOrder())
 
@@ -39,6 +35,7 @@ class IIANetInputConverter(
 //        videoFrameBuffer.add(frame)
         if(videoInputBuffer.remaining() <= 0) {
             Log.w(TAG, "비디오 버퍼 꽉 참")
+            return
         }
 
         for (y in 0 until frameSize) {
@@ -67,6 +64,7 @@ class IIANetInputConverter(
 
         if(audioInputBuffer.remaining() <= 0) {
             Log.w(TAG, "오디오 버퍼 꽉 참")
+            return
         }
         val chunkBuffer = ByteBuffer.wrap(chunk).order(ByteOrder.nativeOrder()).asShortBuffer()
 
@@ -82,15 +80,21 @@ class IIANetInputConverter(
     }
 
     fun checkIfReady(): Boolean {
-        val videoInputBuffer = if(status == 'A') videoInputBufferA else videoInputBufferB
-        val audioInputBuffer = if(status == 'A') audioInputBufferA else audioInputBufferB
-        return videoInputBuffer.remaining() <= 0 && audioInputBuffer.remaining() <= 0
+        synchronized(this) {
+            val videoInputBuffer = if (status == 'A') videoInputBufferA else videoInputBufferB
+            val audioInputBuffer = if (status == 'A') audioInputBufferA else audioInputBufferB
+            return videoInputBuffer.remaining() <= 0 && audioInputBuffer.remaining() <= 0
+        }
     }
 
     fun processBuffers(): Pair<ByteBuffer, ByteBuffer> {
-        val videoInputBuffer = if(status == 'A') videoInputBufferA else videoInputBufferB
-        val audioInputBuffer = if(status == 'A') audioInputBufferA else audioInputBufferB
-        status = if(status == 'A') 'B' else 'A'
+        val videoInputBuffer: ByteBuffer
+        val audioInputBuffer: ByteBuffer
+        synchronized(this) {
+            videoInputBuffer = if (status == 'A') videoInputBufferA else videoInputBufferB
+            audioInputBuffer = if (status == 'A') audioInputBufferA else audioInputBufferB
+            status = if (status == 'A') 'B' else 'A'
+        }
 
         val start = System.currentTimeMillis()
         videoInputBuffer.rewind()
