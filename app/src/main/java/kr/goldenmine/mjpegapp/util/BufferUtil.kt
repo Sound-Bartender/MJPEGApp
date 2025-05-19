@@ -216,3 +216,20 @@ fun convertDirectlyToPCM16Bytes(buffer: ByteBuffer, sampleCount: Int): ByteArray
 
     return pcmBytes
 }
+
+fun convertPartialFloatToPCM16Bytes(buffer: ByteBuffer, startIndex: Int, endIndex: Int): ByteArray {
+    val floatBuffer = buffer.asFloatBuffer()
+    val sampleCount = endIndex - startIndex
+    val pcmBytes = ByteArray(sampleCount * 2) // 2 bytes per sample
+
+    var byteIndex = 0
+    for (i in startIndex until endIndex) {
+        val floatSample = floatBuffer.get(i)
+        val clamped = (floatSample.coerceIn(-1.0f, 1.0f) * Short.MAX_VALUE).toInt()
+        val shortSample = clamped.toShort()
+        pcmBytes[byteIndex++] = (shortSample.toInt() and 0xFF).toByte()
+        pcmBytes[byteIndex++] = ((shortSample.toInt() shr 8) and 0xFF).toByte()
+    }
+
+    return pcmBytes
+}

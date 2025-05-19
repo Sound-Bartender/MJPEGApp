@@ -2,8 +2,7 @@ package kr.goldenmine.mjpegapp.ai
 
 import android.content.Context
 import android.util.Log
-import kr.goldenmine.mjpegapp.util.convertDirectlyToPCM16Bytes
-import kr.goldenmine.mjpegapp.util.convertFloatArrayToPCM16Bytes
+import kr.goldenmine.mjpegapp.util.convertPartialFloatToPCM16Bytes
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.gpu.GpuDelegate
 import java.io.FileInputStream
@@ -19,6 +18,8 @@ object IIANetTFLite {
     private lateinit var interpreterAudio: Interpreter
 
     private var isRunning = false
+
+    var keepFrames = 0
 
     private fun loadModelFile(context: Context, modelPath: String): ByteBuffer {
         val assetFileDescriptor = context.assets.openFd(modelPath)
@@ -48,7 +49,7 @@ object IIANetTFLite {
     }
 
     fun loadVideoModel(context: Context) {
-        val model = loadModelFile(context, "IIANetVideo_2.tflite")
+        val model = loadModelFile(context, "IIANetVideo_16.tflite")
         try {
             val gpuOptions = Interpreter.Options()
             gpuOptions.addDelegate(GpuDelegate())
@@ -96,7 +97,7 @@ object IIANetTFLite {
         }
 
         // convert to pcm16
-        val result = convertDirectlyToPCM16Bytes(audioOutputBuffer, 16000)
+        val result = convertPartialFloatToPCM16Bytes(audioOutputBuffer, keepFrames * 640, 16000)
 //        val result = convertDirectlyToPCM16Bytes(audioInputBuffer, 16000)
         val time4 = System.currentTimeMillis()
 

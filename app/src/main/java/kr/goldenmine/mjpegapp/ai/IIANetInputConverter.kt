@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import android.util.Log
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.util.LinkedList // Queue로 사용하거나 List로 사용
 import androidx.core.graphics.get
 
 class IIANetInputConverter(
@@ -24,6 +23,8 @@ class IIANetInputConverter(
 
     private var status = 'A'
 
+    var keepFrames = 0
+
     fun addVideoFrame(frame: Bitmap) {
         if (frame.width != frameSize || frame.height != frameSize) {
             Log.w(TAG, "비디오 프레임 크기가 88x88이 아닙니다. 무시됨.")
@@ -38,9 +39,11 @@ class IIANetInputConverter(
             return
         }
 
+        // 들어가는 float의 개수: frameSize^2 * 4 bytes
         for (y in 0 until frameSize) {
             for (x in 0 until frameSize) {
-                val pixel = frame[x, y]
+                val pixel = frame[y, frameSize - 1 - x]  // 회전된 좌표계
+//                val pixel = frame[x, y]
                 // Convert RGB to grayscale (luma transform)
                 val r = (pixel shr 16 and 0xFF)
                 val g = (pixel shr 8 and 0xFF)
@@ -80,21 +83,19 @@ class IIANetInputConverter(
     }
 
     fun checkIfReady(): Boolean {
-        synchronized(this) {
+//        synchronized(this) {
             val videoInputBuffer = if (status == 'A') videoInputBufferA else videoInputBufferB
             val audioInputBuffer = if (status == 'A') audioInputBufferA else audioInputBufferB
             return videoInputBuffer.remaining() <= 0 && audioInputBuffer.remaining() <= 0
-        }
+//        }
     }
 
     fun processBuffers(): Pair<ByteBuffer, ByteBuffer> {
-        val videoInputBuffer: ByteBuffer
-        val audioInputBuffer: ByteBuffer
-        synchronized(this) {
-            videoInputBuffer = if (status == 'A') videoInputBufferA else videoInputBufferB
-            audioInputBuffer = if (status == 'A') audioInputBufferA else audioInputBufferB
-            status = if (status == 'A') 'B' else 'A'
-        }
+//        synchronized(this) {
+        // synchronized가 필요 없는 게 해당 함수들은 모두 단일 스레드에서 호출 됨
+        val videoInputBuffer = if (status == 'A') videoInputBufferA else videoInputBufferB
+        val audioInputBuffer = if (status == 'A') audioInputBufferA else audioInputBufferB
+        status = if (status == 'A') 'B' else 'A'
 
         val start = System.currentTimeMillis()
         videoInputBuffer.rewind()
@@ -119,6 +120,27 @@ class IIANetInputConverter(
 
         newAudioBuffer.rewind()
         audioInputBuffer.rewind()
+
+        if(keepFrames > 0) {
+            val videoInputBufferNext = if (status == 'A') videoInputBufferA else videoInputBufferB
+            val audioInputBufferNext = if (status == 'A') audioInputBufferA else audioInputBufferB
+
+            videoInputBufferNext.rewind()
+            audioInputBufferNext.rewind()
+
+            val videoCopyCount = frameSize * frameSize * keepFrames * 4
+            val audioCopyCount = audioSamplesPerChunk * keepFrames * 4
+
+            videoInputBuffer.position(0).limit(videoCopyCount)
+            videoInputBufferNext.put(videoInputBuffer)
+
+            audioInputBuffer.position(0).limit(audioCopyCount)
+            audioInputBufferNext.put(audioInputBuffer)
+
+            // pos = 0, lim = cap, rewind
+            videoInputBuffer.clear()
+            audioInputBuffer.clear()
+        }
 
         Log.d(TAG, "데이터 준비 완료 $status ${System.currentTimeMillis() - start}")
 

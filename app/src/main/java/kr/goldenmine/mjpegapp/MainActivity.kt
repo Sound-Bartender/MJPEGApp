@@ -10,6 +10,7 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SwitchCompat
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +46,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var buttonConnect: Button
     private lateinit var editTextIpAddress: EditText
     private lateinit var editTextPort: EditText
+    private lateinit var switch: SwitchCompat
 
     private var clientSocket: Socket? = null
     private var dataInputStream: DataInputStream? = null
@@ -63,6 +65,8 @@ class MainActivity : AppCompatActivity() {
     // 실제 구현에서는 타임스탬프 기반의 더 정교한 버퍼링/매칭 로직 필요
     private val videoFrameBuffer = ConcurrentLinkedQueue<Pair<Long, ByteArray>>() // Timestamp, MJPEG data
     private val audioChunkBuffer = ConcurrentLinkedQueue<Pair<Long, ByteArray>>() // Timestamp, Raw audio data
+
+    private var keepOn = false
 
     // --- Queue 관련 추가 ---
     // 전송할 오디오 데이터를 담을 데이터 클래스
@@ -105,6 +109,7 @@ class MainActivity : AppCompatActivity() {
         buttonConnect = findViewById(R.id.buttonConnect)
         editTextIpAddress = findViewById(R.id.editTextIpAddress)
         editTextPort = findViewById(R.id.editTextPort)
+        switch = findViewById(R.id.inferenceSwitch)
 
         textViewStatus.movementMethod = ScrollingMovementMethod() // 스크롤 가능하게
 //        OnnxInferenceManagerMulti.initialize(this)
@@ -114,6 +119,10 @@ class MainActivity : AppCompatActivity() {
 //        FaceProcessor.initialize(this)
 
         buttonConnect.setOnClickListener {
+            keepOn = switch.isChecked
+            converter.keepFrames = if(keepOn) 10 else 0
+            IIANetTFLite.keepFrames = if(keepOn) 10 else 0
+
             FaceProcessor.initialize(this)
             if (!isRunning.get()) {
                 val ipAddress = editTextIpAddress.text.toString().trim()
@@ -139,12 +148,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-//        coroutineScope.launch {
-//            val videoInputDummy = ByteBuffer.allocateDirect(1 * 25 * 88 * 88 * 4).order(ByteOrder.nativeOrder())
-//            val audioInputDummy = ByteBuffer.allocateDirect(1 * 1 * 16000 * 4).order(ByteOrder.nativeOrder())
-//
-//            IIANetTFLite.runInference(videoInputDummy, audioInputDummy)
-//        }
+        coroutineScope.launch {
+            val videoInputDummy = ByteBuffer.allocateDirect(1 * 25 * 88 * 88 * 4).order(ByteOrder.nativeOrder())
+            val audioInputDummy = ByteBuffer.allocateDirect(1 * 1 * 16000 * 4).order(ByteOrder.nativeOrder())
+
+            IIANetTFLite.runInference(videoInputDummy, audioInputDummy)
+        }
     }
 
     private fun updateStatus(message: String) {
@@ -209,7 +218,6 @@ class MainActivity : AppCompatActivity() {
                         updateStatus("연결 실패 (타임아웃 또는 거부됨)")
                         stopStreamingInternal() // 실패 시 정리
                     }
-
                 } catch (e: SocketException) {
                     updateStatus("네트워크 오류: ${e.message}")
                     stopStreamingInternal()
@@ -390,8 +398,8 @@ class MainActivity : AppCompatActivity() {
                 converter.addVideoFrame(croppedImage)
                 converter.addAudioChunk(bestAudio)
                 showVideoFrame(croppedImage)
-//                showVideoFrame(originalBitmap)
             }
+//            showVideoFrame(originalBitmap)
         }
 
         // 1초 이상 쌓인 경우 AI 처리
