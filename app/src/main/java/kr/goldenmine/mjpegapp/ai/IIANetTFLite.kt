@@ -35,7 +35,7 @@ object IIANetTFLite {
 
     fun loadAudioModel(context: Context) {
         val model = loadModelFile(context, "IIANetAudio_12.tflite")
-        Log.i("TFLite", "mapped length = ${model.capacity()} bytes")  // 76722476 76722476
+        Log.i(TAG, "mapped length = ${model.capacity()} bytes")  // 76722476 76722476
         try {
             val gpuOptions = Interpreter.Options()
             gpuOptions.addDelegate(GpuDelegate())
@@ -49,7 +49,7 @@ object IIANetTFLite {
     }
 
     fun loadVideoModel(context: Context) {
-        val model = loadModelFile(context, "IIANetVideo_16.tflite")
+        val model = loadModelFile(context, "IIANetVideo_2.tflite")
         try {
             val gpuOptions = Interpreter.Options()
             gpuOptions.addDelegate(GpuDelegate())

@@ -17,7 +17,15 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // ...
+        ndk {
+            abiFilters += setOf("armeabi-v7a", "arm64-v8a") // 필요한 ABI 추가
+        }
     }
+
+//    defaultConfig {
+//
+//    }
 
     buildTypes {
         release {
@@ -103,7 +111,9 @@ dependencies {
 //    implementation("org.tensorflow:tensorflow-lite-select-tf-ops:2.16.1") // ✅ 필수
     // AI 기능 관련 라이브러리
 
-    implementation(libs.tasks.vision) // MediaPipe Vision Tasks 라이브러리
+//    implementation(libs.tasks.vision) // MediaPipe Vision Tasks 라이브러리
     implementation(libs.onnxruntime.android)
+//    implementation("com.google.mediapipe:tasks-vision-image-generator:latest.release")
+    implementation("com.google.mediapipe:tasks-vision:latest.release")
 
 }

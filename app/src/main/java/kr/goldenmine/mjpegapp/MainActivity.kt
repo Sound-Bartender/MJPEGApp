@@ -21,7 +21,6 @@ import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kr.goldenmine.mjpegapp.ai.FaceProcessor
 import kr.goldenmine.mjpegapp.ai.IIANetInputConverter
 import kr.goldenmine.mjpegapp.ai.IIANetTFLite
 import java.io.BufferedInputStream
@@ -117,13 +116,13 @@ class MainActivity : AppCompatActivity() {
         IIANetTFLite.loadVideoModel(applicationContext)
         IIANetTFLite.loadAudioModel(applicationContext)
 //        FaceProcessor.initialize(this)
+//        FaceProcessor.initialize(this)
 
         buttonConnect.setOnClickListener {
             keepOn = switch.isChecked
             converter.keepFrames = if(keepOn) 10 else 0
             IIANetTFLite.keepFrames = if(keepOn) 10 else 0
 
-            FaceProcessor.initialize(this)
             if (!isRunning.get()) {
                 val ipAddress = editTextIpAddress.text.toString().trim()
                 val portStr = editTextPort.text.toString().trim()
@@ -391,8 +390,8 @@ class MainActivity : AppCompatActivity() {
 
         // 싱크가 맞춰진 비디오와 오디오 제공
         if(bestVideo != null && bestAudio != null) {
-//            val originalBitmap = BitmapFactory.decodeByteArray(bestVideo, 0, bestVideo.size)
-            val croppedImage = FaceProcessor.detectCropResizeFace(bestVideo, this)
+            val croppedImage = BitmapFactory.decodeByteArray(bestVideo, 0, bestVideo.size)
+//            val croppedImage = FaceProcessor.detectCropResizeFace(bestVideo, this)
 
             if(croppedImage != null) {
                 converter.addVideoFrame(croppedImage)

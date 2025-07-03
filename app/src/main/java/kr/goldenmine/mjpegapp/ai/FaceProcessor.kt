@@ -20,7 +20,6 @@ import kotlin.math.max
 import kotlin.math.min
 
 object FaceProcessor {
-
     private const val TAG = "FaceProcessor"
     private const val FACE_MODEL = "blaze_face_short_range.tflite" // assets 폴더에 있는 모델 파일명
     private const val TARGET_WIDTH = 88
@@ -33,7 +32,7 @@ object FaceProcessor {
             .setBaseOptions(
                 BaseOptions.builder()
                     .setModelAssetPath(FACE_MODEL)
-                    .setDelegate(Delegate.GPU)
+//                    .setDelegate(Delegate.GPU)
                     .build()
             )
             .setRunningMode(RunningMode.IMAGE) // 단일 이미지 처리 모드

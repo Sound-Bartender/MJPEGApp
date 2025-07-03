@@ -44,7 +44,7 @@
             android:layout_marginStart="16dp"
             android:hint="라즈베리파이 IP 주소"
             android:inputType="textUri"
-            android:text="192.168.50.185"
+            android:text="192.168.0.150"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/imageView" />
 
